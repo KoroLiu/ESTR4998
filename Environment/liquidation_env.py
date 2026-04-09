@@ -56,11 +56,12 @@ class LiquidationEnv(gym.Env):
         self.q = self.q0
         self.S = self.S0
 
-    def reset(self, seed=None, options=None):
+    def reset(self, seed=None, options=None, z_path=None): # <-- 增加 z_path 参数
         super().reset(seed=seed)
         self.current_step = 0
         self.q = self.q0
         self.S = self.S0
+        self.z_path = z_path # <-- 保存这条路径
         
         obs = self._get_obs()
         return obs, {}
@@ -102,13 +103,17 @@ class LiquidationEnv(gym.Env):
         
         step_reward = -(exec_cost + risk_penalty)
         
-        # 5. 更新状态
         self.q -= v_t * self.dt
         
-        # GBM 价格更新 (使用 exact solution 避免负价格)
-        Z = np.random.normal(0, 1)
+        # GBM 价格更新: 优先使用传入的 z_path，否则随机生成
+        if self.z_path is not None and self.current_step < len(self.z_path):
+            Z = self.z_path[self.current_step]
+        else:
+            Z = np.random.normal(0, 1)
+            
         self.S = self.S * np.exp((-0.5 * self.sigma**2) * self.dt + self.sigma * np.sqrt(self.dt) * Z)
         
+        # 必须先用完 Z，再增加 step
         self.current_step += 1
         
         # 6. 检查是否终止及计算终局惩罚
